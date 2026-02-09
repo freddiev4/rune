@@ -10,10 +10,14 @@ Enhanced with:
 import copy
 import json
 import os
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
+# Marker used by project_doc to prefix each AGENTS.md block.
+_PROJECT_DOC_PREFIX = "Instructions from: "
 
 
 @dataclass
@@ -129,14 +133,37 @@ class Session:
 
     # ----- Compaction -----
 
+    @staticmethod
+    def _strip_project_doc_blocks(text: str) -> str:
+        """Remove AGENTS.md instruction blocks from *text*.
+
+        During compaction the system prompt is preserved but AGENTS.md content
+        is stripped because fresh instructions will be re-injected from the
+        current filesystem state on the next prompt build.
+        """
+        if _PROJECT_DOC_PREFIX not in text:
+            return text
+
+        # Each block starts with "Instructions from: …" and runs until the
+        # next block or end of string.  We split on the prefix and keep only
+        # the portion before the first block.
+        parts = text.split(_PROJECT_DOC_PREFIX)
+        return parts[0].rstrip()
+
     def compact(self, summary: str) -> None:
         """Compact the conversation by replacing older messages with a summary.
 
-        Keeps the system message and last 10 messages.
+        Keeps the system message and last 10 messages.  Any AGENTS.md content
+        embedded in the system message is stripped to avoid duplication — fresh
+        instructions will be re-injected on the next prompt build.
         """
         system_msg = None
         if self.messages and self.messages[0].role == "system":
             system_msg = self.messages[0]
+            # Strip AGENTS.md blocks so they are not duplicated after
+            # compaction (the system prompt is rebuilt with fresh content).
+            if system_msg.content:
+                system_msg.content = self._strip_project_doc_blocks(system_msg.content)
 
         compaction_msg = Message(
             role="system",
