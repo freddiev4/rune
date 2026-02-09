@@ -14,6 +14,7 @@ from openai import OpenAI
 from ..agents import Agent as AgentDef, get_agent, AGENT_REGISTRY
 from rune.harness.mcp_client import MCPManager
 from rune.harness.permissions import PermissionLevel
+from rune.harness.agents_md import read_project_docs
 from rune.harness.session import Session
 from rune.harness.tools import TOOL_DEFINITIONS, ToolExecutor, ToolResult, TodoList
 from rune.harness.skills import SkillsManager
@@ -106,7 +107,11 @@ class Agent:
         skills_section = self.skills.render_skills_section()
         skills_info = f"\n{skills_section}\n" if skills_section else ""
 
-        return f"{self.agent_def.system_prompt}\n{context}{mcp_info}{skills_info}"
+        # Load AGENTS.md project documentation
+        project_doc = read_project_docs(self.working_dir)
+        project_doc_section = f"\n{project_doc}\n" if project_doc else ""
+
+        return f"{self.agent_def.system_prompt}\n{context}{mcp_info}{skills_info}{project_doc_section}"
 
     def _get_permitted_tools(self) -> list[dict[str, Any]]:
         """Get tool definitions filtered by this agent's permissions."""
