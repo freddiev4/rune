@@ -9,11 +9,10 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Generator
 
-from openai import OpenAI
-
 from ..agents import Agent as AgentDef, get_agent, AGENT_REGISTRY
 from rune.harness.mcp_client import MCPManager
 from rune.harness.permissions import PermissionLevel
+from rune.harness.providers import Provider, create_provider
 from rune.harness.agents_md import read_project_docs
 from rune.harness.session import Session
 from rune.harness.tools import TOOL_DEFINITIONS, ToolExecutor, ToolResult, TodoList
@@ -22,8 +21,13 @@ from rune.harness.skills import SkillsManager
 
 @dataclass
 class AgentConfig:
-    """Runtime configuration for an agent instance."""
-    model: str = "gpt-4o"
+    """Runtime configuration for an agent instance.
+
+    The *model* field uses ``provider/model-name`` format, e.g.
+    ``openai/gpt-5.2-2025-12-11`` or ``anthropic/claude-sonnet-4-20250514``.
+    A bare model name (no slash) defaults to the ``openai`` provider.
+    """
+    model: str = "openai/gpt-4o"
     agent_name: str = "build"  # Which agent definition to use
     auto_approve_tools: bool = True
     mcp_config_path: str | None = None  # Path to mcp.json
@@ -66,8 +70,9 @@ class Agent:
         # Load agent definition
         self.agent_def: AgentDef = get_agent(self.config.agent_name)
 
-        # Initialize OpenAI client
-        self.client = OpenAI()
+        # Initialize LLM provider (openai or anthropic)
+        self.provider: Provider
+        self.provider, self.model_name = create_provider(self.config.model)
 
         # Shared todo list (subagents share with parent)
         self.todo_list = _parent_todo_list or TodoList()
@@ -212,12 +217,12 @@ class Agent:
         return result.response if result else ""
 
     def _call_model(self):
-        """Call the OpenAI API with the current conversation."""
+        """Call the LLM API with the current conversation."""
         # Inject skill bodies for this turn based on the latest user message.
         # This is done at call time so skills are not persisted across turns.
         self.skills.apply_turn_injections(self.session)
-        return self.client.chat.completions.create(
-            model=self.config.model,
+        return self.provider.chat(
+            model=self.model_name,
             messages=self.session.get_api_messages(),
             tools=self._get_permitted_tools(),
             tool_choice="auto",
@@ -307,8 +312,8 @@ class Agent:
             "Include key decisions, files modified, and current state."
         )
         try:
-            resp = self.client.chat.completions.create(
-                model=self.config.model,
+            resp = self.provider.chat(
+                model=self.model_name,
                 messages=messages + [{"role": "user", "content": summary_prompt}],
                 temperature=0.0,
                 max_completion_tokens=1024,
