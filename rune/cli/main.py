@@ -70,16 +70,22 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  rune                              # Interactive build agent
-  rune --agent plan                 # Interactive plan (read-only) agent
-  rune -p "list all files"          # Single prompt mode
-  rune --mcp-config mcp.json        # Load MCP tool servers
-  rune --model gpt-5.2-2025-12-11   # Use a different model
+  rune                                             # Interactive build agent
+  rune --agent plan                                # Interactive plan (read-only) agent
+  rune -p "list all files"                         # Single prompt mode
+  rune --mcp-config mcp.json                       # Load MCP tool servers
+  rune --model openai/gpt-5.2-2025-12-11           # Use an OpenAI model
+  rune --model anthropic/claude-sonnet-4-20250514  # Use an Anthropic model
 """,
     )
 
     parser.add_argument("-p", "--prompt", help="Single prompt (non-interactive)")
-    parser.add_argument("--model", default="gpt-5.2-2025-12-11", help="OpenAI model (default: gpt-4o)")
+    parser.add_argument(
+        "--model",
+        default="openai/gpt-5.2-2025-12-11",
+        help="provider/model (default: openai/gpt-5.2-2025-12-11). "
+             "Providers: openai, anthropic",
+    )
     parser.add_argument("--agent", default="build", choices=["build", "plan"],
                         help="Agent type (default: build)")
     parser.add_argument("--mcp-config", default=None,

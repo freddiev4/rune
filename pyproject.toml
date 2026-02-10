@@ -8,6 +8,7 @@ authors = [{ name = "Freddie Vargus", email = "fjv41995@gmail.com" }]
 
 dependencies = [
   "openai>=1.0.0,<2.0.0",
+  "anthropic>=0.39.0,<1.0.0",
   "rich>=13.0.0,<14.0.0",
   "prompt_toolkit>=3.0.0,<4.0.0",
   "pyyaml>=6.0",
