@@ -336,7 +336,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "signal_send",
-            "description": "Send a Signal message. Requires signal-cli daemon to be running. Use this to notify about task completion, errors, or important events.",
+            "description": "Send a Signal message. Supports multiple backends: signal-cli daemon, REST API (Docker), or webhook. Use this to notify about task completion, errors, or important events.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -375,6 +375,10 @@ class ToolExecutor:
         todo_list: TodoList | None = None,
         subagent_callback=None,
         signal_account: str | None = None,
+        signal_backend: str = "signalcli",
+        signal_base_url: str | None = None,
+        signal_webhook_url: str | None = None,
+        signal_webhook_headers: dict[str, str] | None = None,
     ):
         self.working_dir = os.path.abspath(working_dir)
         self.timeout = timeout
@@ -384,6 +388,11 @@ class ToolExecutor:
         self.subagent_callback = subagent_callback
         # Signal account for sending messages
         self.signal_account = signal_account
+        # Signal transport configuration
+        self._signal_backend = signal_backend
+        self._signal_base_url = signal_base_url
+        self._signal_webhook_url = signal_webhook_url
+        self._signal_webhook_headers = signal_webhook_headers
 
     def execute(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
         """Execute a tool with the given arguments."""
@@ -742,6 +751,7 @@ class ToolExecutor:
 
         try:
             from rune.integrations.signal import send_signal_message
+            from rune.integrations.signal.transport import create_transport
 
             # Resolve attachment paths relative to working directory
             resolved_attachments = []
@@ -757,15 +767,24 @@ class ToolExecutor:
                             error=f"Invalid attachment path '{path}': {e}"
                         )
 
+            # Build transport from config
+            transport = create_transport(
+                self._signal_backend,
+                base_url=self._signal_base_url,
+                webhook_url=self._signal_webhook_url,
+                webhook_headers=self._signal_webhook_headers,
+            )
+
             # Send the message
             result = send_signal_message(
                 to=to,
                 text=message,
                 account=self.signal_account,
-                attachments=resolved_attachments if resolved_attachments else None
+                attachments=resolved_attachments if resolved_attachments else None,
+                transport=transport,
             )
 
-            output = f"✓ Signal message sent to {to}"
+            output = f"Signal message sent to {to} via {transport.name}"
             if result.get("message_id"):
                 output += f"\nMessage ID: {result['message_id']}"
             if resolved_attachments:
@@ -776,9 +795,24 @@ class ToolExecutor:
         except Exception as e:
             error_msg = str(e)
             # Add helpful hints for common errors
-            if "Cannot connect to signal-cli daemon" in error_msg:
-                error_msg += "\n\nTip: Start the daemon with:\n  signal-cli -a +PHONE daemon --http localhost:7583"
+            if "Cannot connect" in error_msg:
+                if self._signal_backend == "rest":
+                    error_msg += (
+                        "\n\nTip: Start the Docker container with:\n"
+                        "  docker run -d -p 8080:8080 bbernhard/signal-cli-rest-api"
+                    )
+                else:
+                    error_msg += (
+                        "\n\nTip: Start the daemon with:\n"
+                        "  signal-cli -a +PHONE daemon --http localhost:7583"
+                    )
             elif "signal-cli not found" in error_msg:
-                error_msg += "\n\nTip: Install signal-cli:\n  macOS: brew install signal-cli\n  Linux: https://github.com/AsamK/signal-cli/releases"
+                error_msg += (
+                    "\n\nTip: Install signal-cli:\n"
+                    "  macOS: brew install signal-cli\n"
+                    "  Linux: https://github.com/AsamK/signal-cli/releases\n\n"
+                    "Or use a different backend (rest, webhook) to avoid\n"
+                    "installing signal-cli locally."
+                )
 
             return ToolResult(success=False, output="", error=f"Failed to send Signal message: {error_msg}")

@@ -34,6 +34,10 @@ class AgentConfig:
 
     # Signal integration (optional)
     signal_account: str | None = None  # Phone number for Signal account (e.g., "+1234567890")
+    signal_backend: str = "signalcli"  # "signalcli", "rest", or "webhook"
+    signal_base_url: str | None = None  # Override base URL for signalcli/rest backends
+    signal_webhook_url: str | None = None  # Webhook URL (required when backend="webhook")
+    signal_webhook_headers: dict[str, str] | None = None  # Extra headers for webhook
 
 
 @dataclass
@@ -86,6 +90,10 @@ class Agent:
             todo_list=self.todo_list,
             subagent_callback=self._spawn_subagent if not _is_subagent else None,
             signal_account=self.config.signal_account,
+            signal_backend=self.config.signal_backend,
+            signal_base_url=self.config.signal_base_url,
+            signal_webhook_url=self.config.signal_webhook_url,
+            signal_webhook_headers=self.config.signal_webhook_headers,
         )
 
         # Initialize MCP manager
