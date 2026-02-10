@@ -98,7 +98,7 @@ agent = Agent(config=config)
 
 ## Built-in Tools
 
-Rune includes 15 powerful tools:
+Rune includes 16 powerful tools:
 
 **File Operations:**
 - `read_file` - Read files with line range support
@@ -123,6 +123,9 @@ Rune includes 15 powerful tools:
 - `todo` - Structured task list management
 - `notebook_edit` - Edit Jupyter notebook cells
 
+**Integrations:**
+- `signal_send` - Send Signal messages (requires signal-cli setup)
+
 ## MCP Integration
 
 Extend Rune with external tool servers using the Model Context Protocol:
@@ -143,9 +146,47 @@ Extend Rune with external tool servers using the Model Context Protocol:
 rune --mcp-config mcp.json
 ```
 
+## Signal Integration
+
+Rune can send Signal messages to notify you when tasks complete, errors occur, or important events happen.
+
+### Quick Setup
+
+1. **Install signal-cli:**
+   ```bash
+   brew install signal-cli
+   ```
+
+2. **Link your Signal account:**
+   ```bash
+   signal-cli -a +1234567890 link -n "Rune Agent"
+   # Scan the QR code with Signal mobile app
+   ```
+
+3. **Start the daemon:**
+   ```bash
+   signal-cli -a +1234567890 daemon --http localhost:7583
+   ```
+
+4. **Use in Rune:**
+   ```python
+   from rune import Agent, AgentConfig
+
+   config = AgentConfig(
+       signal_account="+1234567890"  # Your Signal number
+   )
+   agent = Agent(config=config)
+
+   # Agent can now send Signal messages!
+   agent.run("Create a report.txt file, then send it to me via Signal at +0987654321")
+   ```
+
+For detailed documentation, see [docs/2026-02-09/signal-integration/](docs/2026-02-09/signal-integration/).
+
 ## Examples
 
-See `example.py` and `researcher.py` for complete examples.
+See `examples/` directory for complete examples:
+- `signal_example.py` - Signal messaging integration examples
 
 ## Architecture
 

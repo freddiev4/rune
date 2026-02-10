@@ -1,6 +1,6 @@
 """Tool definitions and execution for the coding agent.
 
-Provides 15 built-in tools for file operations, shell commands, and more:
+Provides 16 built-in tools for file operations, shell commands, and more:
   1. shell          - Execute shell commands
   2. read_file      - Read file contents (with optional line range)
   3. write_file     - Write/create files
@@ -16,6 +16,7 @@ Provides 15 built-in tools for file operations, shell commands, and more:
  13. task           - Spawn a subagent for a subtask
  14. todo           - Manage a structured task list
  15. notebook_edit  - Edit Jupyter notebook cells
+ 16. signal_send    - Send Signal messages (requires signal-cli setup)
 """
 
 import fnmatch
@@ -331,6 +332,32 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "signal_send",
+            "description": "Send a Signal message. Requires signal-cli daemon to be running. Use this to notify about task completion, errors, or important events.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "Recipient phone number (e.g., '+1234567890'), group ID (e.g., 'group:abc123'), or username (e.g., 'u:alice')"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Message text to send"
+                    },
+                    "attachments": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of file paths to attach"
+                    },
+                },
+                "required": ["to", "message"],
+            },
+        },
+    },
 ]
 
 
@@ -347,6 +374,7 @@ class ToolExecutor:
         timeout: int = 30,
         todo_list: TodoList | None = None,
         subagent_callback=None,
+        signal_account: str | None = None,
     ):
         self.working_dir = os.path.abspath(working_dir)
         self.timeout = timeout
@@ -354,6 +382,8 @@ class ToolExecutor:
         # Callback: (description, prompt) -> str.  Set by the Agent to enable
         # the "task" tool to spawn a child agent loop.
         self.subagent_callback = subagent_callback
+        # Signal account for sending messages
+        self.signal_account = signal_account
 
     def execute(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
         """Execute a tool with the given arguments."""
@@ -373,6 +403,7 @@ class ToolExecutor:
             "task": self._execute_task,
             "todo": self._execute_todo,
             "notebook_edit": self._execute_notebook_edit,
+            "signal_send": self._execute_signal_send,
         }
 
         handler = handlers.get(tool_name)
@@ -697,3 +728,57 @@ class ToolExecutor:
         with open(resolved, "w") as f:
             json.dump(notebook, f, indent=1)
         return ToolResult(success=True, output=f"Updated cell {cell_index} in {path}")
+
+    def _execute_signal_send(self, args: dict[str, Any]) -> ToolResult:
+        """Execute the signal_send tool."""
+        to = args.get("to", "")
+        message = args.get("message", "")
+        attachments = args.get("attachments", [])
+
+        if not to:
+            return ToolResult(success=False, output="", error="No recipient provided")
+        if not message:
+            return ToolResult(success=False, output="", error="No message provided")
+
+        try:
+            from rune.integrations.signal import send_signal_message
+
+            # Resolve attachment paths relative to working directory
+            resolved_attachments = []
+            if attachments:
+                for path in attachments:
+                    try:
+                        resolved = self._resolve_path(path)
+                        resolved_attachments.append(resolved)
+                    except Exception as e:
+                        return ToolResult(
+                            success=False,
+                            output="",
+                            error=f"Invalid attachment path '{path}': {e}"
+                        )
+
+            # Send the message
+            result = send_signal_message(
+                to=to,
+                text=message,
+                account=self.signal_account,
+                attachments=resolved_attachments if resolved_attachments else None
+            )
+
+            output = f"✓ Signal message sent to {to}"
+            if result.get("message_id"):
+                output += f"\nMessage ID: {result['message_id']}"
+            if resolved_attachments:
+                output += f"\nAttachments: {len(resolved_attachments)} file(s)"
+
+            return ToolResult(success=True, output=output)
+
+        except Exception as e:
+            error_msg = str(e)
+            # Add helpful hints for common errors
+            if "Cannot connect to signal-cli daemon" in error_msg:
+                error_msg += "\n\nTip: Start the daemon with:\n  signal-cli -a +PHONE daemon --http localhost:7583"
+            elif "signal-cli not found" in error_msg:
+                error_msg += "\n\nTip: Install signal-cli:\n  macOS: brew install signal-cli\n  Linux: https://github.com/AsamK/signal-cli/releases"
+
+            return ToolResult(success=False, output="", error=f"Failed to send Signal message: {error_msg}")

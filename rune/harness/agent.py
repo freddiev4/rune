@@ -32,6 +32,9 @@ class AgentConfig:
     auto_approve_tools: bool = True
     mcp_config_path: str | None = None  # Path to mcp.json
 
+    # Signal integration (optional)
+    signal_account: str | None = None  # Phone number for Signal account (e.g., "+1234567890")
+
 
 @dataclass
 class TurnResult:
@@ -82,6 +85,7 @@ class Agent:
             self.working_dir,
             todo_list=self.todo_list,
             subagent_callback=self._spawn_subagent if not _is_subagent else None,
+            signal_account=self.config.signal_account,
         )
 
         # Initialize MCP manager
