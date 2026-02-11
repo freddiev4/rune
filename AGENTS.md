@@ -11,11 +11,11 @@ Rune is a Python-based coding agent framework with a Rich/prompt_toolkit TUI, su
 | What                  | Where                                         |
 |-----------------------|-----------------------------------------------|
 | Project config & deps | `pyproject.toml`                              |
-| CLI & TUI spec        | `rune/cli/README.md`                          |
-| Skills system         | `rune/harness/SKILLS_IMPLEMENTATION.md`       |
+| CLI & TUI spec        | `docs/cli.md`                                 |
+| Skills system         | `docs/skills.md`                              |
 | Agent skills          | `.agents/skills/`                             |
 | Tests                 | `rune/tests/`                                 |
-| Work tracking         | `docs/YYYY-MM-DD/<feature>/`                  |
+| Feature docs          | `docs/<feature>/`                             |
 | CI / publish          | `.github/workflows/publish-package.yml`       |
 
 ## Code Layout
@@ -67,7 +67,7 @@ Tests live in `rune/tests/`. See `test_skills.py` (41 tests) and `test_agents_md
 
 ## Tracking Work
 
-For any new piece of work, create a `docs/YYYY-MM-DD/<feature>/` folder containing:
+For any new feature or piece of work, create a `docs/<feature>/` folder containing:
 
 - `plan.md` — planning and design decisions
 - `todo.md` — task tracking
@@ -77,7 +77,7 @@ For any new piece of work, create a `docs/YYYY-MM-DD/<feature>/` folder containi
 
 Rune uses progressive disclosure for agent skills. The skills list is always in the system prompt; full content loads on-demand when mentioned via `$skill-name` or `[$skill-name](path)`.
 
-See `rune/harness/SKILLS_IMPLEMENTATION.md` for the full design, activation methods, and API.
+See `docs/skills.md` for the full design, activation methods, and API.
 
 ## Key Conventions
 
