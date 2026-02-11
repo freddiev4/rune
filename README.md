@@ -145,7 +145,7 @@ rune --mcp-config mcp.json
 
 ## Examples
 
-See `example.py` and `researcher.py` for complete examples.
+See the CLI examples above for usage patterns.
 
 ## Architecture
 
@@ -190,7 +190,7 @@ uv pip install -e .
 pytest
 
 # Format code
-black .
+ruff check --fix .
 ```
 
 ## API Reference
