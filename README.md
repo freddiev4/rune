@@ -39,7 +39,7 @@ rune -p "create a hello.py file"
 rune --agent plan
 
 # Use different model
-rune --model gpt-5.2-2025-12-11
+rune --model openai/gpt-5.2-2025-12-11
 
 # With MCP servers
 rune --mcp-config mcp.json
@@ -57,7 +57,7 @@ print(result)
 
 # With configuration
 agent = Agent(config=AgentConfig(
-    model="gpt-5.2-2025-12-11",
+    model="openai/gpt-5.2-2025-12-11",
     agent_name="build",
     auto_approve_tools=True
 ))
@@ -87,7 +87,7 @@ for turn in agent.stream("Analyze the codebase"):
 from rune import Agent, AgentConfig
 
 config = AgentConfig(
-    model="gpt-4o",              # OpenAI model to use
+    model="openai/gpt-4o",       # OpenAI model to use
     agent_name="build",          # Agent type
     auto_approve_tools=True,     # Auto-approve tool execution
     mcp_config_path=None         # Path to MCP config JSON
