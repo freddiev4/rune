@@ -1,38 +1,87 @@
 # AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with any project.
+This file is a map for AI agents working in this repository. It covers the essentials — project identity, conventions, and pointers to deeper documentation. Keep this file concise; detailed specs live closer to the code they describe.
 
-## Development Environment
-Always `uv` to manage dependencies as well as work within a `virtualenv` for Python codebases. For example:
+## Project Overview
 
-```bash
-# initialize uv
-uv init --no-workspace
+Rune is a Python-based coding agent framework with a Rich/prompt_toolkit TUI, supporting OpenAI and Anthropic models. Entry point: `rune/cli/main.py`. Core runtime: `rune/harness/`.
 
-# create a virtualenv
-uv venv
+## Quick Reference
 
-# Activate virtual environment
-source .venv/bin/activate
+| What                  | Where                                         |
+|-----------------------|-----------------------------------------------|
+| Project config & deps | `pyproject.toml`                              |
+| CLI & TUI spec        | `rune/cli/README.md`                          |
+| Skills system         | `rune/harness/SKILLS_IMPLEMENTATION.md`       |
+| Agent skills          | `.agents/skills/`                             |
+| Tests                 | `rune/tests/`                                 |
+| Work tracking         | `docs/YYYY-MM-DD/<feature>/`                  |
+| CI / publish          | `.github/workflows/publish-package.yml`       |
 
-# install deps if exist
-uv pip install -e .
+## Code Layout
+
+```
+rune/
+├── cli/            # TUI, input widget, CLI entry point
+├── harness/        # Agent loop, session, tools, providers, skills, MCP, permissions
+├── tests/          # pytest suite
+├── agents.py       # Agent type definitions (build, plan, subagent)
+└── utils.py        # Shared utilities
 ```
 
-For Typescript codebases, always use `bun`.
+## Development Environment
 
-## Development Workflow
-When making changes to any codebase, always be sure to make a new branch, add, and commit the changes, as well as push them up to GitHub. 
+- **Python**: >=3.10 (see `pyproject.toml` for exact bounds)
+- **Package manager**: Always use `uv`. Work inside a virtualenv.
+- **TypeScript projects**: Use `bun`.
 
-1. Check git status: `git status`
-2. Review changes: `git diff`
-3. Stage and commit changes with a descriptive message
-4. Push to remote: `git push`
+```bash
+uv venv && source .venv/bin/activate && uv pip install -e ".[dev]"
+```
 
-Always commit and push after completing a logical unit of work (e.g., implementing a feature, fixing a bug, refactoring code) rather than committing everything at once.
+## Linting & Formatting
 
-If the `gh` cli exists, then make a pull request with your changes.
+Ruff is the sole linter. Configuration lives in `pyproject.toml` under `[tool.ruff]`.
 
+```bash
+ruff check .          # lint
+ruff check --fix .    # auto-fix
+```
+
+Rules enabled: `E` (pycodestyle), `F` (pyflakes), `I` (isort), `TID` (tidy-imports). Relative imports are banned — use absolute imports everywhere.
+
+## Testing
+
+```bash
+pytest rune/tests/ -v
+```
+
+Tests live in `rune/tests/`. See `test_skills.py` (41 tests) and `test_agents_md.py` for existing coverage. Always run relevant tests before pushing.
+
+## Git Workflow
+
+1. Create a feature branch from `main`.
+2. Commit after each logical unit of work with a descriptive message.
+3. Push to remote.
+4. If `gh` CLI is available, open a pull request.
 
 ## Tracking Work
-When starting any new piece of work, always make a `docs/YYYY-MM-DD/[feature]/` folder (using today's date). The folder should contain a `plan.md` file to track the planning, a `todo.md` for managing todos, and a `docs.md` for documentation about the feature such as setup, how it works, and references.
+
+For any new piece of work, create a `docs/YYYY-MM-DD/<feature>/` folder containing:
+
+- `plan.md` — planning and design decisions
+- `todo.md` — task tracking
+- `docs.md` — setup, how it works, references
+
+## Skills System
+
+Rune uses progressive disclosure for agent skills. The skills list is always in the system prompt; full content loads on-demand when mentioned via `$skill-name` or `[$skill-name](path)`.
+
+See `rune/harness/SKILLS_IMPLEMENTATION.md` for the full design, activation methods, and API.
+
+## Key Conventions
+
+- **Dependencies**: Prefer stable, well-known libraries that agents can reason about. See `pyproject.toml` for current deps.
+- **Imports**: Absolute only (enforced by ruff `TID` rule).
+- **Agent types**: `build` (full access), `plan` (read-only), `subagent` (no nesting). Defined in `rune/agents.py`.
+- **Tools**: 15 built-in tools covering file ops, shell, web, and organization. Defined in `rune/harness/tools.py`.
