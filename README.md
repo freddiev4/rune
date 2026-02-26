@@ -87,7 +87,7 @@ for turn in agent.stream("Analyze the codebase"):
 from rune import Agent, AgentConfig
 
 config = AgentConfig(
-    model="openai/gpt-4o",       # OpenAI model to use
+    model="openai/gpt-4o",       # Model to use (provider/model format)
     agent_name="build",          # Agent type
     auto_approve_tools=True,     # Auto-approve tool execution
     mcp_config_path=None         # Path to MCP config JSON
@@ -215,7 +215,7 @@ Agent(
 
 ```python
 AgentConfig(
-    model: str = "gpt-4o",
+    model: str = "openai/gpt-4o",
     agent_name: str = "build",
     auto_approve_tools: bool = True,
     mcp_config_path: str | None = None
