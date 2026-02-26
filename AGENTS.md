@@ -13,6 +13,7 @@ Rune is a Python-based coding agent framework with a Rich/prompt_toolkit TUI, su
 | Project config & deps | `pyproject.toml`                              |
 | CLI & TUI spec        | `docs/cli.md`                                 |
 | Skills system         | `docs/skills.md`                              |
+| Sessions              | `docs/sessions.md`                            |
 | Agent skills          | `.agents/skills/`                             |
 | Tests                 | `rune/tests/`                                 |
 | Feature docs          | `docs/<feature>/`                             |
