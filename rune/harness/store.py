@@ -257,11 +257,25 @@ class SessionStore:
         return [dict(r) for r in rows]
 
     def delete_session(self, session_id: str) -> None:
-        """Delete a session and all its messages."""
-        with self._conn:
-            self._conn.execute(
-                "DELETE FROM sessions WHERE session_id=?", (session_id,)
+        """Delete a session, its messages, and all descendant sessions recursively."""
+        # Collect the full subtree ordered deepest-first to satisfy the FK constraint
+        # (children must be deleted before their parents).
+        rows = self._conn.execute(
+            """
+            WITH RECURSIVE tree AS (
+                SELECT session_id, 0 AS depth
+                FROM sessions WHERE session_id = ?
+                UNION ALL
+                SELECT s.session_id, t.depth + 1
+                FROM sessions s JOIN tree t ON s.parent_session_id = t.session_id
             )
+            SELECT session_id FROM tree ORDER BY depth DESC
+            """,
+            (session_id,),
+        ).fetchall()
+        with self._conn:
+            for (sid,) in rows:
+                self._conn.execute("DELETE FROM sessions WHERE session_id=?", (sid,))
 
     def close(self) -> None:
         """Close the database connection."""
