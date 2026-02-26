@@ -15,6 +15,7 @@ from rune.harness.permissions import PermissionLevel
 from rune.harness.providers import Provider, create_provider
 from rune.harness.agents_md import read_project_docs
 from rune.harness.session import Session
+from rune.harness.store import SessionStore
 from rune.harness.tools import TOOL_DEFINITIONS, ToolExecutor, ToolResult, TodoList
 from rune.harness.skills import SkillsManager
 
@@ -31,6 +32,7 @@ class AgentConfig:
     agent_name: str = "build"  # Which agent definition to use
     auto_approve_tools: bool = True
     mcp_config_path: str | None = None  # Path to mcp.json
+    use_store: bool = True  # Whether to persist sessions to SQLite
 
 
 @dataclass
@@ -100,6 +102,13 @@ class Agent:
             working_dir=self.working_dir,
             system_prompt=self._build_system_prompt(),
         )
+
+        # Initialize session store (skip for subagents to avoid redundant writes)
+        if self.config.use_store and not _is_subagent:
+            self.store: SessionStore | None = SessionStore()
+            self.store.save_session(self.session)
+        else:
+            self.store = None
 
     def _build_system_prompt(self) -> str:
         """Build the complete system prompt with context."""
@@ -189,22 +198,28 @@ class Agent:
                         result=result_content,
                     )
 
-                yield TurnResult(
+                turn_result = TurnResult(
                     response=message.content,
                     tool_calls=tool_calls_data,
                     tool_results=tool_results,
                     finished=False,
                     agent_name=self.agent_def.name,
                 )
+                yield turn_result
+                if self.store:
+                    self.store.save_session(self.session)
             else:
                 self.session.add_assistant_message(content=message.content)
-                yield TurnResult(
+                turn_result = TurnResult(
                     response=message.content,
                     tool_calls=[],
                     tool_results=[],
                     finished=True,
                     agent_name=self.agent_def.name,
                 )
+                yield turn_result
+                if self.store:
+                    self.store.save_session(self.session)
                 return message.content
 
         return "Agent reached maximum turn limit."
@@ -351,6 +366,19 @@ class Agent:
             system_prompt=self._build_system_prompt(),
         )
 
+    def resume_session(self, session_id: str) -> None:
+        """Load an existing session from the store and replace the current session.
+
+        Raises KeyError if the session is not found.
+        Raises RuntimeError if no store is configured.
+        """
+        if self.store is None:
+            raise RuntimeError("No session store configured (use_store=False)")
+        self.session = self.store.load_session(session_id)
+
     def shutdown(self) -> None:
         """Clean up resources (MCP servers, etc.)."""
+        if self.store:
+            self.store.save_session(self.session)
+            self.store.close()
         self.mcp.shutdown_all()

@@ -6,8 +6,10 @@ import os
 import sys
 
 from rich.console import Console
+from rich.table import Table
 
 from rune.harness.agent import Agent, AgentConfig
+from rune.harness.store import SessionStore
 from rune.agents import list_agents
 
 console = Console()
@@ -98,8 +100,44 @@ Examples:
         choices=["tui"],
         help="Interactive UI mode (default: tui)",
     )
+    parser.add_argument(
+        "--resume",
+        metavar="SESSION_ID",
+        default=None,
+        help="Resume an existing session by ID",
+    )
+    parser.add_argument(
+        "--list-sessions",
+        action="store_true",
+        help="List recent sessions and exit",
+    )
 
     args = parser.parse_args()
+
+    # Handle --list-sessions: print table of recent sessions and exit
+    if args.list_sessions:
+        store = SessionStore()
+        sessions = store.list_sessions()
+        store.close()
+
+        table = Table(title="Recent Sessions", show_header=True, header_style="bold cyan")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Title", max_width=40)
+        table.add_column("Directory", max_width=30)
+        table.add_column("Updated", no_wrap=True)
+        table.add_column("Turns", justify="right")
+
+        for s in sessions:
+            table.add_row(
+                s["session_id"],
+                s["title"] or "[dim](no title)[/dim]",
+                s["working_dir"],
+                s["updated_at"],
+                str(s["turn_count"]),
+            )
+
+        console.print(table)
+        return
 
     # Resolve MCP config path
     mcp_path = args.mcp_config
@@ -124,6 +162,15 @@ Examples:
         config=config,
         approval_callback=approval_callback if not config.auto_approve_tools else None,
     )
+
+    # Handle --resume: load existing session before running
+    if args.resume:
+        try:
+            agent.resume_session(args.resume)
+            console.print(f"[green]Resumed session {args.resume}[/green]")
+        except KeyError:
+            console.print(f"[red]Session {args.resume!r} not found.[/red]")
+            sys.exit(1)
 
     if args.prompt:
         run_single(agent, args.prompt)
