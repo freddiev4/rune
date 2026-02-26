@@ -5,6 +5,7 @@ from rune.harness.session import Session, Message, UsageStats
 from rune.harness.permissions import PermissionLevel, PermissionSet
 from rune.harness.agent import Agent, TurnResult, AgentConfig
 from rune.harness.tools import ToolExecutor, ToolResult
+from rune.harness.store import SessionStore
 
 __all__ = [
     "Agent",
@@ -20,6 +21,7 @@ __all__ = [
     "AgentConfig",
     "ToolExecutor",
     "ToolResult",
+    "SessionStore",
 ]
 
 __version__ = "0.2.0"

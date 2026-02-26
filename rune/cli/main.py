@@ -6,8 +6,10 @@ import os
 import sys
 
 from rich.console import Console
+from rich.table import Table
 
 from rune.harness.agent import Agent, AgentConfig
+from rune.harness.store import SessionStore
 from rune.agents import list_agents
 
 console = Console()
@@ -98,8 +100,87 @@ Examples:
         choices=["tui"],
         help="Interactive UI mode (default: tui)",
     )
+    parser.add_argument(
+        "--resume",
+        metavar="SESSION_ID",
+        default=None,
+        help="Resume an existing session by ID",
+    )
+    parser.add_argument(
+        "--list-sessions",
+        action="store_true",
+        help="List recent sessions and exit",
+    )
+    parser.add_argument(
+        "--show-tree",
+        metavar="SESSION_ID",
+        default=None,
+        help="Show the session tree for a root session ID and exit",
+    )
 
     args = parser.parse_args()
+
+    # Handle --list-sessions: print table of recent sessions and exit
+    if args.list_sessions:
+        store = SessionStore()
+        sessions = store.list_sessions()
+        store.close()
+
+        table = Table(title="Recent Sessions", show_header=True, header_style="bold cyan")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Title", max_width=40)
+        table.add_column("Directory", max_width=30)
+        table.add_column("Updated", no_wrap=True)
+        table.add_column("Turns", justify="right")
+
+        for s in sessions:
+            table.add_row(
+                s["session_id"],
+                s["title"] or "[dim](no title)[/dim]",
+                s["working_dir"],
+                s["updated_at"],
+                str(s["turn_count"]),
+            )
+
+        console.print(table)
+        return
+
+    # Handle --show-tree: print indented tree of a session and all subagent sessions
+    if args.show_tree:
+        store = SessionStore()
+        nodes = store.get_session_tree(args.show_tree)
+        store.close()
+        if not nodes:
+            console.print(f"[red]Session {args.show_tree!r} not found.[/red]")
+            sys.exit(1)
+        from rich.tree import Tree
+        # Build id→node and id→rich_node lookups
+        id_to_node = {n["session_id"]: n for n in nodes}
+        id_to_rich = {}
+        root = nodes[0]
+        root_label = (
+            f"[cyan]{root['session_id']}[/cyan]  "
+            f"{root['title'] or '(no title)'}  "
+            f"[dim]{root['working_dir']}[/dim]  "
+            f"turns={root['turn_count']}"
+        )
+        tree = Tree(f"Session Tree: {args.show_tree}\n{root_label}")
+        id_to_rich[root["session_id"]] = tree
+        for node in nodes[1:]:
+            label = (
+                f"[cyan]{node['session_id']}[/cyan]  "
+                f"{node['title'] or '(no title)'}  "
+                f"[dim]{node['working_dir']}[/dim]  "
+                f"turns={node['turn_count']}"
+            )
+            parent_rich = id_to_rich.get(node["parent_session_id"])
+            if parent_rich is not None:
+                child_rich = parent_rich.add(label)
+            else:
+                child_rich = tree.add(label)
+            id_to_rich[node["session_id"]] = child_rich
+        console.print(tree)
+        return
 
     # Resolve MCP config path
     mcp_path = args.mcp_config
@@ -124,6 +205,15 @@ Examples:
         config=config,
         approval_callback=approval_callback if not config.auto_approve_tools else None,
     )
+
+    # Handle --resume: load existing session before running
+    if args.resume:
+        try:
+            agent.resume_session(args.resume)
+            console.print(f"[green]Resumed session {args.resume}[/green]")
+        except KeyError:
+            console.print(f"[red]Session {args.resume!r} not found.[/red]")
+            sys.exit(1)
 
     if args.prompt:
         run_single(agent, args.prompt)
