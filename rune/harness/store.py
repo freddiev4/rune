@@ -230,6 +230,32 @@ class SessionStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_session_tree(self, root_id: str) -> list[dict]:
+        """Return the full session tree rooted at root_id.
+
+        Uses a recursive CTE to walk parent→child edges.
+        Returns a flat list of session dicts ordered by depth then created_at.
+        Each dict includes all list_sessions fields plus 'depth' and 'parent_session_id'.
+        """
+        rows = self._conn.execute(
+            """
+            WITH RECURSIVE tree AS (
+                SELECT session_id, parent_session_id, title, working_dir,
+                       created_at, updated_at, turn_count, 0 AS depth
+                FROM sessions
+                WHERE session_id = ?
+                UNION ALL
+                SELECT s.session_id, s.parent_session_id, s.title, s.working_dir,
+                       s.created_at, s.updated_at, s.turn_count, t.depth + 1
+                FROM sessions s
+                JOIN tree t ON s.parent_session_id = t.session_id
+            )
+            SELECT * FROM tree ORDER BY depth, created_at
+            """,
+            (root_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def delete_session(self, session_id: str) -> None:
         """Delete a session and all its messages."""
         with self._conn:

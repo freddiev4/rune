@@ -63,6 +63,7 @@ class Agent:
         approval_callback: Callable[[str, str, dict], bool] | None = None,
         _is_subagent: bool = False,
         _parent_todo_list: TodoList | None = None,
+        _store: "SessionStore | None" = None,
     ):
         self.working_dir = os.getcwd()
         self.config = config or AgentConfig()
@@ -103,12 +104,17 @@ class Agent:
             system_prompt=self._build_system_prompt(),
         )
 
-        # Initialize session store (skip for subagents to avoid redundant writes)
-        if self.config.use_store and not _is_subagent:
-            self.store: SessionStore | None = SessionStore()
-            self.store.save_session(self.session)
+        # Initialize session store
+        if _store is not None:
+            # Subagent: share the parent's store instance
+            self.store: SessionStore | None = _store
+        elif self.config.use_store:
+            # Root agent: create a new store
+            self.store = SessionStore()
         else:
             self.store = None
+        if self.store:
+            self.store.save_session(self.session)
 
     def _build_system_prompt(self) -> str:
         """Build the complete system prompt with context."""
@@ -303,6 +309,7 @@ class Agent:
             approval_callback=self.approval_callback,
             _is_subagent=True,
             _parent_todo_list=self.todo_list,
+            _store=self.store,
         )
 
         # Replace the child agent's session with the forked one
@@ -310,6 +317,8 @@ class Agent:
 
         # Run the subagent
         result = child_agent.run(prompt)
+        if self.store:
+            self.store.save_session(child_session)
 
         # Accumulate child usage into parent
         self.session.usage.add(
