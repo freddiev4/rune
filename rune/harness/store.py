@@ -7,6 +7,7 @@ after every turn.
 import json
 import os
 import sqlite3
+import threading
 from datetime import datetime, timezone
 
 from rune.harness.session import Session, Message, UsageStats
@@ -72,7 +73,8 @@ class SessionStore:
     def __init__(self, db_path: str = DB_PATH):
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.db_path = db_path
-        self._conn = sqlite3.connect(db_path)
+        self._lock = threading.Lock()
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._migrate()
 
@@ -93,7 +95,7 @@ class SessionStore:
         title = _derive_title(session)
         created_at = session.created_at.isoformat()
 
-        with self._conn:
+        with self._lock, self._conn:
             self._conn.execute(
                 """
                 INSERT INTO sessions (
@@ -273,7 +275,7 @@ class SessionStore:
             """,
             (session_id,),
         ).fetchall()
-        with self._conn:
+        with self._lock, self._conn:
             for (sid,) in rows:
                 self._conn.execute("DELETE FROM sessions WHERE session_id=?", (sid,))
 
