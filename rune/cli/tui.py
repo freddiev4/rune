@@ -34,7 +34,8 @@ from prompt_toolkit.layout.containers import (
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.margins import Margin
 from prompt_toolkit.styles import Style
-from prompt_toolkit.widgets import CompletionsMenu, TextArea
+from prompt_toolkit.layout.menus import CompletionsMenu
+from prompt_toolkit.widgets import TextArea
 from rune.agents import list_agents
 
 
