@@ -331,13 +331,6 @@ def run_tui(agent) -> None:
         left_margins=[_PromptGlyphMargin(lambda: f"{_prompt_char()} ")],
     )
 
-    header = FormattedTextControl(
-        text=lambda: [
-            ("class:title", "Rune"),
-            ("", "  "),
-            ("class:status", f"Agent: {agent.agent_def.name}  Model: {agent.config.model}"),
-        ]
-    )
 
     # ------------------------------------------------------------------
     # Spinner
@@ -857,7 +850,6 @@ def run_tui(agent) -> None:
     )
 
     inner_root = HSplit([
-        Window(header, height=1),
         output_container,
         details_pane,
         spinner_container,
