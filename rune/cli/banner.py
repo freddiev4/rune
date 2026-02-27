@@ -78,6 +78,7 @@ def build_welcome_banner(console, agent) -> None:
 
     tools = agent._get_permitted_tools()
     n_tools = len(tools)
+    n_skills = len(agent.skills.discover_skills())
     model = agent.config.model
     cwd = agent.session.working_dir
     session_id = agent.session.session_id
@@ -122,7 +123,7 @@ def build_welcome_banner(console, agent) -> None:
         right_lines.append(f"[dim {_C3}]  … and {n_tools - _MAX_TOOLS} more[/]")
     right_lines += [
         "",
-        f"[dim {_C3}]{n_tools} tools · type [/][{_C2}]/help[/][dim {_C3}] for commands[/]",
+        f"[dim {_C3}]{n_tools} tools · {n_skills} skill{'s' if n_skills != 1 else ''}[/]",
     ]
     right_content = "\n".join(right_lines)
 
