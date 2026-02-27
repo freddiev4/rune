@@ -235,10 +235,13 @@ def run_tui(agent) -> None:
             "user_input": "bg:#ffffff fg:#000000",
             "code": "#5b9bd5",
             "spinner": "#b0b0b0",
-            "completion-menu": "bg:#2b2b2b #ffffff",
-            "completion-menu.completion.current": "bg:#4a9eff #ffffff",
-            "completion-menu.meta.completion": "#888888",
-            "completion-menu.meta.completion.current": "#cccccc",
+            "completion-menu": "bg:#1a1a1a #e8e8e8",
+            "completion-menu.completion": "bg:#1a1a1a #e8e8e8",
+            "completion-menu.completion.current": "bg:#005faf #ffffff bold",
+            "completion-menu.meta.completion": "bg:#2d2d2d #707070",
+            "completion-menu.meta.completion.current": "bg:#004d8f #aaccee",
+            "scrollbar.background": "bg:#3a3a3a",
+            "scrollbar.button": "bg:#888888",
         }
     )
 
