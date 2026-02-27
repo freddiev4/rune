@@ -106,25 +106,49 @@ _RUNE_ART = [
 
 def _build_splash(agent) -> str:
     """Build the startup splash: runic ASCII art on the left, session info on the right."""
+    from importlib.metadata import version as _pkg_version
+    try:
+        _version = _pkg_version("rune-agent")
+    except Exception:
+        _version = "0.2.0"
+
     n_tools = len(agent._get_permitted_tools())
     info = [
-        " ᚱᚢᚾᛖ  runic agent framework",
+        f" ᚱᚢᚾᛖ  Rune Agent v{_version}",
+        "  cast spells on your data",
         "",
-        f" Agent:    {agent.agent_def.name}",
-        f" Model:    {agent.config.model}",
-        f" Session:  {agent.session.session_id}",
-        f" Tools:    {n_tools} available",
+        f"  Agent:    {agent.agent_def.name}",
+        f"  Model:    {agent.config.model}",
+        f"  Session:  {agent.session.session_id}",
+        f"  Tools:    {n_tools} available",
     ]
+
     art_w = max(len(line) for line in _RUNE_ART)
+    info_w = max(len(line) for line in info)
+    inner_w = art_w + 2 + info_w  # 2-char gap between columns
+
     rows = max(len(_RUNE_ART), len(info))
-    lines = []
+    body_lines = []
     for i in range(rows):
         left = _RUNE_ART[i] if i < len(_RUNE_ART) else " " * art_w
         right = info[i] if i < len(info) else ""
-        lines.append(f"{left:<{art_w}}{right}")
-    lines.append("")
-    lines.append(" " + "─" * (art_w + 30))
-    lines.append(" Type / for commands  ·  Ctrl+C to interrupt  ·  Ctrl+D to exit")
+        row = f"{left:<{art_w}}  {right:<{info_w}}"
+        body_lines.append(row)
+
+    hint = " Type / for commands  ·  Ctrl+C interrupt  ·  Ctrl+D exit "
+    box_w = max(inner_w, len(hint)) + 2  # +2 for the leading space on each side
+
+    top    = "╭" + "─" * box_w + "╮"
+    bottom = "╰" + "─" * box_w + "╯"
+    div    = "├" + "─" * box_w + "┤"
+
+    lines = [top]
+    for row in body_lines:
+        lines.append(f"│ {row:<{box_w - 1}}│")
+    lines.append(div)
+    lines.append(f"│{hint:^{box_w}}│")
+    lines.append(bottom)
+
     return "\n".join(lines)
 
 
@@ -176,15 +200,27 @@ class _OutputPTKLexer(Lexer):
             if line.startswith("> "):
                 return [("class:user_input", line)]
 
-            # ASCII art banner lines (contain runic stroke characters)
-            if line.startswith(" |") and any(c in line for c in r"\/_="):
-                return [("class:banner_art", line)]
+            _RUNES = "ᚱᚢᚾᛖᚠᚨᚦᚹᚲᚷᚺᛁᛃᛇᛈᛉᛊᛏᛒᛗᛚᛜᛞᛟ"
+            _BOX   = "╭╮╰╯├┤│─"
 
-            # Lines containing Elder Futhark rune characters — gold-tint the runes,
-            # leave the surrounding text normal.
-            _RUNES = "ᚱᚢᚾᛖᚠᚨᚦᚹᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ"
-            if any(c in line for c in _RUNES):
+            # Box border / inner art lines — dim gray overall, but gold for runes
+            is_box_line = line and line[0] in _BOX
+            is_art_line = line.startswith(" |") and any(c in line for c in r"\/_=")
+            if is_box_line or is_art_line:
+                if not any(c in line for c in _RUNES):
+                    return [("class:banner_art", line)]
+                # Mix: dim art characters, gold rune characters
                 parts: list = []
+                for ch in line:
+                    if ch in _RUNES:
+                        parts.append(("class:runes", ch))
+                    else:
+                        parts.append(("class:banner_art", ch))
+                return parts
+
+            # Regular lines with rune characters — gold runes, plain text around them
+            if any(c in line for c in _RUNES):
+                parts = []
                 for ch in line:
                     if ch in _RUNES:
                         parts.append(("class:runes", ch))
