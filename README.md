@@ -116,7 +116,7 @@ Rune includes 15 powerful tools:
 
 **Web:**
 - `web_fetch` - Fetch URL content
-- `web_search` - Search the web (requires TAVILY_API_KEY)
+- `web_search` - Search the web (requires SEARCH_API_KEY)
 
 **Organization:**
 - `task` - Spawn subagent for subtasks
@@ -169,7 +169,7 @@ Rune is split into two main layers:
 
 ### UI / entrypoints
 
-- `rune/cli.py`  Rich-powered interactive CLI and streaming display of tool calls/results.
+- `rune/cli/`  Rich-powered interactive CLI and streaming display of tool calls/results.
 - `from rune import Agent, AgentConfig`  stable public API re-exported from `rune/__init__.py`.
 
 ### Key behaviors
@@ -215,7 +215,7 @@ Agent(
 
 ```python
 AgentConfig(
-    model: str = "gpt-4o",
+    model: str = "openai/gpt-4o",
     agent_name: str = "build",
     auto_approve_tools: bool = True,
     mcp_config_path: str | None = None
