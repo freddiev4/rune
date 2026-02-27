@@ -17,10 +17,35 @@ A powerful coding agent with a clean API and beautiful Rich terminal output.
 ## Installation
 
 ```bash
-# Clone and install
-cd rune
-uv venv
-source .venv/bin/activate
+curl -fsSL https://raw.githubusercontent.com/freddiev4/rune/main/scripts/install.sh | bash
+```
+
+The installer will:
+- Install `uv` and Python 3.10 if needed
+- Clone the repo to `~/.rune/rune/`
+- Create a virtual environment and install dependencies
+- Symlink the `rune` command to `~/.local/bin/`
+- Prompt for your OpenAI / Anthropic API key(s)
+
+**Options:**
+
+```bash
+# Skip the API key prompt
+curl -fsSL ... | bash -s -- --skip-setup
+
+# Install a specific branch
+curl -fsSL ... | bash -s -- --branch my-branch
+
+# Custom install directory
+curl -fsSL ... | bash -s -- --dir ~/code/rune
+```
+
+**Manual install:**
+
+```bash
+git clone https://github.com/freddiev4/rune.git ~/.rune/rune
+cd ~/.rune/rune
+uv venv .venv --python 3.10
 uv pip install -e .
 ```
 
