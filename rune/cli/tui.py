@@ -93,6 +93,40 @@ _INITIAL_HELP = (
     "PgUp/PgDn: Scroll  │  Home/End: Jump  │  Ctrl+D: Exit"
 )
 
+# ASCII art banner — each letter column is separated so the lexer can
+# detect "banner art" lines by the leading " |" pattern.
+_RUNE_ART = [
+    r" |\     |     | |\   | |=====",
+    r" | \    |     | | \  | |     ",
+    r" |--\   |     | |  \ | |==== ",
+    r" |   \  |     | |   \| |     ",
+    r" |    \ |_____| |    | |=====",
+]
+
+
+def _build_splash(agent) -> str:
+    """Build the startup splash: runic ASCII art on the left, session info on the right."""
+    n_tools = len(agent._get_permitted_tools())
+    info = [
+        " ᚱᚢᚾᛖ  runic agent framework",
+        "",
+        f" Agent:    {agent.agent_def.name}",
+        f" Model:    {agent.config.model}",
+        f" Session:  {agent.session.session_id}",
+        f" Tools:    {n_tools} available",
+    ]
+    art_w = max(len(line) for line in _RUNE_ART)
+    rows = max(len(_RUNE_ART), len(info))
+    lines = []
+    for i in range(rows):
+        left = _RUNE_ART[i] if i < len(_RUNE_ART) else " " * art_w
+        right = info[i] if i < len(info) else ""
+        lines.append(f"{left:<{art_w}}{right}")
+    lines.append("")
+    lines.append(" " + "─" * (art_w + 30))
+    lines.append(" Type / for commands  ·  Ctrl+C to interrupt  ·  Ctrl+D to exit")
+    return "\n".join(lines)
+
 
 # ---------------------------------------------------------------------------
 # Slash-command completer
@@ -142,7 +176,23 @@ class _OutputPTKLexer(Lexer):
             if line.startswith("> "):
                 return [("class:user_input", line)]
 
-            fragments = []
+            # ASCII art banner lines (contain runic stroke characters)
+            if line.startswith(" |") and any(c in line for c in r"\/_="):
+                return [("class:banner_art", line)]
+
+            # Lines containing Elder Futhark rune characters — gold-tint the runes,
+            # leave the surrounding text normal.
+            _RUNES = "ᚱᚢᚾᛖᚠᚨᚦᚹᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ"
+            if any(c in line for c in _RUNES):
+                parts: list = []
+                for ch in line:
+                    if ch in _RUNES:
+                        parts.append(("class:runes", ch))
+                    else:
+                        parts.append(("", ch))
+                return parts
+
+            fragments: list = []
             pos = 0
             while pos < len(line):
                 tick_start = line.find("`", pos)
@@ -245,6 +295,8 @@ def run_tui(agent) -> None:
             "completion-menu.meta.completion.current": "bg:#004d8f #aaccee",
             "scrollbar.background": "bg:#3a3a3a",
             "scrollbar.button": "bg:#888888",
+            "banner_art": "#505050",
+            "runes": "bold #c8a84b",
         }
     )
 
@@ -901,7 +953,7 @@ def run_tui(agent) -> None:
         spinner_task = asyncio.create_task(_spinner_loop())
         spinner["task"] = spinner_task
 
-        printer_holder["p"].print(_INITIAL_HELP)
+        printer_holder["p"].print(_build_splash(agent))
         try:
             await app_task
         finally:
