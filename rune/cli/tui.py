@@ -52,7 +52,7 @@ _RUNE_VERBS = [
     "Runecrafting",
     "Firemaking",
     "Fletching",
-    "Brewing",      # Herblore
+    "Brewing",
     "Slaying",
     "Training",
     "Grinding",
@@ -60,28 +60,30 @@ _RUNE_VERBS = [
     "Enchanting",
     "Alching",
     "Thieving",
-    "Climbing",     # Agility
+    "Climbing",
     "Forging",
     "Smelting",
     "Casting",
     "Conjuring",
 ]
 
-_SLASH_COMMANDS = [
-    ("exit",    "Exit rune"),
-    ("quit",    "Exit rune"),
-    ("reset",   "Clear session history"),
-    ("history", "Show conversation history"),
-    ("status",  "Show session stats"),
-    ("agents",  "List available agents"),
-    ("switch",  "Switch agent: /switch <agent>"),
-    ("retry",   "Re-run the last prompt"),
-    ("undo",    "Remove last exchange from history"),
-    ("model",   "Switch model: /model <provider/model>"),
-    ("save",    "Save session to JSON: /save [filename]"),
-    ("tools",   "List available tools"),
-    ("compact", "Compact conversation history"),
-]
+_SLASH_COMMANDS = sorted(
+    [
+        ("exit",    "Exit rune"),
+        ("reset",   "Clear session history"),
+        ("history", "Show conversation history"),
+        ("status",  "Show session stats"),
+        ("agents",  "List available agents"),
+        ("switch",  "Switch agent: /switch <agent>"),
+        ("retry",   "Re-run the last prompt"),
+        ("undo",    "Remove last exchange from history"),
+        ("model",   "Switch model: /model <provider/model>"),
+        ("save",    "Save session to JSON: /save [filename]"),
+        ("tools",   "List available tools"),
+        ("compact", "Compact conversation history"),
+    ],
+    key=lambda x: x[0],
+)
 
 _INITIAL_HELP = (
     "Commands: /"
@@ -104,6 +106,7 @@ class _SlashCommandCompleter(Completer):
         # Only complete on a single-line input that starts with /
         if "\n" in text or not text.startswith("/"):
             return
+        
         word = text[1:]
         for cmd, desc in _SLASH_COMMANDS:
             if cmd.startswith(word):
@@ -508,7 +511,7 @@ def run_tui(agent) -> None:
         arg = rest[0] if rest else ""
         p = printer_holder["p"]
 
-        if cmd in {"exit", "quit"}:
+        if cmd in {"exit"}:
             app.exit(result=None)
 
         elif cmd == "reset":
