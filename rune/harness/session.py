@@ -243,3 +243,16 @@ class Session:
         if system_msg:
             self.messages.append(system_msg)
         self.turn_count = 0
+
+    def undo_last_exchange(self) -> bool:
+        """Remove the last user message and all subsequent messages.
+
+        Returns True if anything was removed, False if there was nothing to undo.
+        """
+        for i in range(len(self.messages) - 1, -1, -1):
+            if self.messages[i].role == "user":
+                self.messages = self.messages[:i]
+                if self.turn_count > 0:
+                    self.turn_count -= 1
+                return True
+        return False
