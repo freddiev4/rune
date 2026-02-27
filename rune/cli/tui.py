@@ -256,7 +256,7 @@ def run_tui(agent) -> None:
             "completion-menu.meta.completion.current": "bg:#004d8f #aaccee",
             "scrollbar.background": "bg:#3a3a3a",
             "scrollbar.button": "bg:#888888",
-            "runes": "bold #c8a84b",
+            "runes": "bold #b8d8e8",
         }
     )
 

@@ -14,32 +14,52 @@ except Exception:
 
 
 # ---------------------------------------------------------------------------
+# Rune armor colour palette  (cool steel-blue, lightest → darkest)
+#
+#   _C1  #b8d8e8  bright silver-blue   — top highlights / rune characters
+#   _C2  #78a8c0  medium teal-blue     — mid-tone, inner sigil lines
+#   _C3  #4a7896  main armour body     — dominant colour
+#   _C4  #2e5068  shadow               — recessed areas
+#   _C5  #1c3a50  deep shadow          — deepest recesses / outer edges
+# ---------------------------------------------------------------------------
+
+_C1 = "#b8d8e8"
+_C2 = "#78a8c0"
+_C3 = "#4a7896"
+_C4 = "#2e5068"
+_C5 = "#1c3a50"
+
+
+# ---------------------------------------------------------------------------
 # ASCII art
 # ---------------------------------------------------------------------------
 
-# "RUNE" in full-block box-drawing letters, gold→bronze gradient top-to-bottom
-RUNE_LOGO = """\
-[bold #FFD700]██████╗ ██╗   ██╗███╗   ██╗███████╗[/]
-[bold #FFD700]██╔══██╗██║   ██║████╗  ██║██╔════╝[/]
-[#FFBF00]██████╔╝██║   ██║██╔██╗ ██║█████╗  [/]
-[#FFBF00]██╔══██╗██║   ██║██║╚██╗██║██╔══╝  [/]
-[#CD7F32]██║  ██║╚██████╔╝██║ ╚████║███████╗[/]
-[#CD7F32]╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝[/]"""
+# "RUNE" in full-block box-drawing letters.
+# Gradient bright (top) → dark (bottom), like light catching the armour.
+RUNE_LOGO = (
+    f"[bold {_C1}]██████╗ ██╗   ██╗███╗   ██╗███████╗[/]\n"
+    f"[bold {_C1}]██╔══██╗██║   ██║████╗  ██║██╔════╝[/]\n"
+    f"[{_C2}]██████╔╝██║   ██║██╔██╗ ██║█████╗  [/]\n"
+    f"[{_C2}]██╔══██╗██║   ██║██║╚██╗██║██╔══╝  [/]\n"
+    f"[{_C3}]██║  ██║╚██████╔╝██║ ╚████║███████╗[/]\n"
+    f"[{_C3}]╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝[/]"
+)
 
 # Vegvísir-inspired runic compass.
 # Cardinal runes: ᚱ north · ᛖ east · ᚾ south · ᚢ west
+# Centre is brightest; arms darken toward the outer tips.
 RUNE_SIGIL = (
-    "[bold #c8a84b]            ᚱ[/]\n"
-    "[#CD7F32]            │[/]\n"
-    "[#B8860B]      ╲     │     ╱[/]\n"
-    "[#CD7F32]       ╲────┤────╱[/]\n"
-    "[#FFBF00]       │╲   │   ╱│[/]\n"
-    "[bold #c8a84b]ᚢ[/][#FFD700] ────╫──╲──┼──╱──╫──── [/][bold #c8a84b]ᛖ[/]\n"
-    "[#FFBF00]       │╱   │   ╲│[/]\n"
-    "[#CD7F32]       ╱────┤────╲[/]\n"
-    "[#B8860B]      ╱     │     ╲[/]\n"
-    "[#CD7F32]            │[/]\n"
-    "[bold #c8a84b]            ᚾ[/]"
+    f"[bold {_C1}]            ᚱ[/]\n"
+    f"[{_C3}]            │[/]\n"
+    f"[{_C4}]      ╲     │     ╱[/]\n"
+    f"[{_C3}]       ╲────┤────╱[/]\n"
+    f"[{_C2}]       │╲   │   ╱│[/]\n"
+    f"[bold {_C1}]ᚢ[/][{_C2}] ────╫──╲──┼──╱──╫──── [/][bold {_C1}]ᛖ[/]\n"
+    f"[{_C2}]       │╱   │   ╲│[/]\n"
+    f"[{_C3}]       ╱────┤────╲[/]\n"
+    f"[{_C4}]      ╱     │     ╲[/]\n"
+    f"[{_C3}]            │[/]\n"
+    f"[bold {_C1}]            ᚾ[/]"
 )
 
 
@@ -77,16 +97,16 @@ def build_welcome_banner(console, agent) -> None:
         "",
         RUNE_SIGIL,
         "",
-        f"[#FFBF00]{agent_name}[/]  [dim #B8860B]{model_short}[/]",
-        f"[dim #B8860B]{cwd}[/]",
-        f"[dim #8B8682]session · {session_id}[/]",
+        f"[{_C1}]{agent_name}[/]  [dim {_C3}]{model_short}[/]",
+        f"[dim {_C3}]{cwd}[/]",
+        f"[dim {_C4}]session · {session_id}[/]",
     ]
     left_content = "\n".join(left_lines)
 
     # --- Right column: tool list ---
     _MAX_TOOLS = 20
     right_lines: list[str] = [
-        f"[bold #FFBF00]Available Tools  ({n_tools})[/]",
+        f"[bold {_C2}]Available Tools  ({n_tools})[/]",
         "",
     ]
     for t in tools[:_MAX_TOOLS]:
@@ -96,15 +116,13 @@ def build_welcome_banner(console, agent) -> None:
         if len(desc) > 44:
             desc = desc[:41] + "…"
         right_lines.append(
-            f"[dim #B8860B]·[/] [#FFF8DC]{name}[/]  [dim #888888]{desc}[/]"
+            f"[dim {_C3}]·[/] [{_C1}]{name}[/]  [dim {_C4}]{desc}[/]"
         )
     if n_tools > _MAX_TOOLS:
-        right_lines.append(
-            f"[dim #B8860B]  … and {n_tools - _MAX_TOOLS} more[/]"
-        )
+        right_lines.append(f"[dim {_C3}]  … and {n_tools - _MAX_TOOLS} more[/]")
     right_lines += [
         "",
-        f"[dim #B8860B]{n_tools} tools · type [/][dim #888888]/help[/][dim #B8860B] for commands[/]",
+        f"[dim {_C3}]{n_tools} tools · type [/][{_C2}]/help[/][dim {_C3}] for commands[/]",
     ]
     right_content = "\n".join(right_lines)
 
@@ -116,9 +134,9 @@ def build_welcome_banner(console, agent) -> None:
 
     panel = Panel(
         layout,
-        title=f"[bold #FFD700]ᚱᚢᚾᛖ  Rune Agent  v{VERSION}[/]",
-        subtitle="[dim #B8860B]cast spells on your data[/]",
-        border_style="#CD7F32",
+        title=f"[bold {_C1}]ᚱᚢᚾᛖ  Rune Agent  v{VERSION}[/]",
+        subtitle=f"[dim {_C3}]cast spells on your data[/]",
+        border_style=_C3,
         padding=(0, 1),
     )
 
