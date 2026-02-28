@@ -350,6 +350,11 @@ class Agent:
 
     # ----- Public API -----
 
+    def switch_model(self, model: str) -> None:
+        """Switch to a different model/provider, preserving the session."""
+        self.provider, self.model_name = create_provider(model)
+        self.config.model = model
+
     def switch_agent(self, agent_name: str) -> None:
         """Switch to a different agent type, preserving conversation history."""
         new_def = get_agent(agent_name)
