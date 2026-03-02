@@ -22,8 +22,10 @@ from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.filters import Condition
+from prompt_toolkit.input.vt100_parser import ANSI_SEQUENCES
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.bindings.basic import load_basic_bindings
+from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout import HSplit, Layout, Window
 from prompt_toolkit.layout.containers import (
     ConditionalContainer,
@@ -33,9 +35,9 @@ from prompt_toolkit.layout.containers import (
 )
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.margins import Margin
+from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.styles import Style
 from prompt_toolkit.layout.menus import CompletionsMenu
-from prompt_toolkit.widgets import TextArea
 from rune.agents import list_agents
 
 
@@ -89,8 +91,7 @@ _INITIAL_HELP = (
     "Commands: /"
     + "  /".join(cmd for cmd, _ in _SLASH_COMMANDS)
     + "\n"
-    "Ctrl+C: Interrupt agent  │  Ctrl+O: Toggle details  │  "
-    "PgUp/PgDn: Scroll  │  Home/End: Jump  │  Ctrl+D: Exit"
+    "Ctrl+C: Interrupt agent  │  Ctrl+O: Toggle details  │  Ctrl+D: Exit"
 )
 
 
@@ -116,64 +117,6 @@ class _SlashCommandCompleter(Completer):
                     display=f"/{cmd}",
                     display_meta=desc,
                 )
-
-
-# ---------------------------------------------------------------------------
-# Output lexer
-# ---------------------------------------------------------------------------
-
-from prompt_toolkit.lexers import Lexer
-
-
-class _OutputPTKLexer(Lexer):
-    """Render-time styling for the output buffer.
-
-    Any line that starts with '> ' is styled as echoed user input.
-    Text wrapped in backticks is styled as inline code.
-    """
-
-    def lex_document(self, document):  # type: ignore[override]
-        def get_line(lineno: int):
-            try:
-                line = document.lines[lineno]
-            except Exception:
-                return []
-
-            if line.startswith("> "):
-                return [("class:user_input", line)]
-
-            # Lines with Elder Futhark rune characters — highlight in gold
-            _RUNES = "ᚱᚢᚾᛖᚠᚨᚦᚹᚲᚷᚺᛁᛃᛇᛈᛉᛊᛏᛒᛗᛚᛜᛞᛟ"
-            if any(c in line for c in _RUNES):
-                parts: list = []
-                for ch in line:
-                    if ch in _RUNES:
-                        parts.append(("class:runes", ch))
-                    else:
-                        parts.append(("", ch))
-                return parts
-
-            fragments: list = []
-            pos = 0
-            while pos < len(line):
-                tick_start = line.find("`", pos)
-                if tick_start == -1:
-                    if pos < len(line):
-                        fragments.append(("", line[pos:]))
-                    break
-                if tick_start > pos:
-                    fragments.append(("", line[pos:tick_start]))
-                tick_end = line.find("`", tick_start + 1)
-                if tick_end == -1:
-                    fragments.append(("", line[tick_start:]))
-                    break
-                code_content = line[tick_start + 1:tick_end]
-                fragments.append(("class:code", code_content))
-                pos = tick_end + 1
-
-            return fragments if fragments else [("", line)]
-
-        return get_line
 
 
 # ---------------------------------------------------------------------------
@@ -207,26 +150,12 @@ class _PromptGlyphMargin(Margin):
 
 @dataclass
 class TuiPrinter:
-    """Appends text into the output TextArea."""
+    """Prints text to terminal stdout (via patch_stdout, goes to native scrollback)."""
 
-    output: TextArea
     app: Application
-    follow_mode: dict[str, bool]
 
     def print(self, text: str = "") -> None:
-        buf = self.output.buffer
-        buf.insert_text(text + "\n", move_cursor=True)
-        self.output.buffer.cursor_position = len(self.output.text)
-        try:
-            self.output.window.vertical_scroll = 10**9  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        if self.follow_mode.get("enabled", True):
-            try:
-                self.output.control.move_cursor_to_end()
-            except Exception:
-                pass
-        self.app.invalidate()
+        print(text)
 
     def print_fragments(self, fragments) -> None:
         from prompt_toolkit.formatted_text import fragment_list_to_text
@@ -260,6 +189,12 @@ def run_tui(agent) -> None:
         }
     )
 
+    # Teach prompt_toolkit to recognise Shift+Enter from terminals that
+    # implement the Kitty keyboard protocol (iTerm2, WezTerm, Kitty, etc.).
+    # The sequence \x1b[13;2u is Kitty's encoding for Shift+Enter; we map it
+    # to ControlJ (the plain newline character) so the binding below fires.
+    ANSI_SEQUENCES.setdefault('\x1b[13;2u', Keys.ControlJ)
+
     kb = KeyBindings()
 
     # ------------------------------------------------------------------
@@ -271,25 +206,6 @@ def run_tui(agent) -> None:
     # ------------------------------------------------------------------
     # Output area
     # ------------------------------------------------------------------
-    output_buffer = Buffer()
-    output_control = BufferControl(
-        buffer=output_buffer,
-        lexer=_OutputPTKLexer(),
-        focusable=True,
-    )
-    output_window = Window(
-        content=output_control,
-        wrap_lines=True,
-        always_hide_cursor=True,
-        scroll_offsets=ScrollOffsets(top=1, bottom=1),
-    )
-
-    # Lightweight TextArea wrapper for existing code paths
-    output = TextArea(text="", focusable=True)
-    output.buffer = output_buffer  # type: ignore[attr-defined]
-    output.control = output_control  # type: ignore[attr-defined]
-
-    follow_mode: dict[str, bool] = {"enabled": True}
     show_details: dict[str, bool] = {"enabled": False}
     details_readonly: dict[str, bool] = {"enabled": True}
 
@@ -323,11 +239,16 @@ def run_tui(agent) -> None:
     def _prompt_title() -> str:
         return f"{agent.agent_def.name} {_prompt_char()}"
 
+    def _input_height() -> int:
+        lines = input_buffer.text.count("\n") + 1
+        return min(lines, 12)
+
     input_control = BufferControl(buffer=input_buffer)
     input_window = Window(
         content=input_control,
-        height=1,
-        wrap_lines=False,
+        get_line_prefix=None,
+        height=_input_height,
+        wrap_lines=True,
         left_margins=[_PromptGlyphMargin(lambda: f"{_prompt_char()} ")],
     )
 
@@ -676,6 +597,9 @@ def run_tui(agent) -> None:
     # ------------------------------------------------------------------
     # Key bindings
     # ------------------------------------------------------------------
+    # Hermes-style input behavior:
+    # - Enter submits
+    # - Option/Alt+Enter inserts newline
     @kb.add("enter", filter=Condition(lambda: True))
     def _(event) -> None:
         buf = event.app.current_buffer
@@ -683,13 +607,9 @@ def run_tui(agent) -> None:
         if buf.complete_state and buf.complete_state.current_completion:
             buf.apply_completion(buf.complete_state.current_completion)
             return
-        doc = buf.document
-        if doc.is_cursor_at_the_end:
-            _submit()
-        else:
-            buf.insert_text("\n")
+        _submit()
 
-    @kb.add("s-tab")
+    @kb.add("escape", "enter")
     def _(event) -> None:
         event.app.current_buffer.insert_text("\n")
 
@@ -730,32 +650,28 @@ def run_tui(agent) -> None:
     def _(event) -> None:
         event.app.exit(result=None)
 
-    # Scrolling — details pane when visible, output pane otherwise
-    @kb.add("pageup")
+    # Scrolling — details pane only (terminal handles main scrollback)
+    @kb.add("pageup", filter=Condition(lambda: show_details["enabled"]))
     def _(event) -> None:
-        target = details_buffer if show_details["enabled"] else output_buffer
-        if not show_details["enabled"]:
-            follow_mode["enabled"] = False
         try:
             for _ in range(10):
-                up = target.document.get_cursor_up_position()
+                up = details_buffer.document.get_cursor_up_position()
                 if up:
-                    target.cursor_position = max(0, target.cursor_position + up)
+                    details_buffer.cursor_position = max(0, details_buffer.cursor_position + up)
                 else:
                     break
             event.app.invalidate()
         except Exception:
             pass
 
-    @kb.add("pagedown")
+    @kb.add("pagedown", filter=Condition(lambda: show_details["enabled"]))
     def _(event) -> None:
-        target = details_buffer if show_details["enabled"] else output_buffer
         try:
             for _ in range(10):
-                down = target.document.get_cursor_down_position()
+                down = details_buffer.document.get_cursor_down_position()
                 if down:
-                    target.cursor_position = min(
-                        len(target.text), target.cursor_position + down
+                    details_buffer.cursor_position = min(
+                        len(details_buffer.text), details_buffer.cursor_position + down
                     )
                 else:
                     break
@@ -763,13 +679,10 @@ def run_tui(agent) -> None:
         except Exception:
             pass
 
-    @kb.add("home")
+    @kb.add("home", filter=Condition(lambda: show_details["enabled"]))
     def _(event) -> None:
-        target = details_buffer if show_details["enabled"] else output_buffer
-        if not show_details["enabled"]:
-            follow_mode["enabled"] = False
         try:
-            target.cursor_position = 0
+            details_buffer.cursor_position = 0
             event.app.invalidate()
         except Exception:
             pass
@@ -781,16 +694,6 @@ def run_tui(agent) -> None:
             event.app.invalidate()
         except Exception:
             pass
-
-    @kb.add("end", filter=Condition(lambda: not show_details["enabled"]))
-    def _(event) -> None:
-        follow_mode["enabled"] = True
-        event.app.layout.focus(input_window)
-        try:
-            output.control.move_cursor_to_end()
-        except Exception:
-            pass
-        event.app.invalidate()
 
     @kb.add("up", filter=Condition(lambda: show_details["enabled"]))
     def _(event) -> None:
@@ -836,11 +739,6 @@ def run_tui(agent) -> None:
         filter=Condition(lambda: show_details["enabled"]),
     )
 
-    output_container = ConditionalContainer(
-        output_window,
-        filter=Condition(lambda: not show_details["enabled"]),
-    )
-
     spinner_container = ConditionalContainer(
         HSplit([
             Window(FormattedTextControl(text=_spinner_text), height=1),
@@ -850,7 +748,6 @@ def run_tui(agent) -> None:
     )
 
     inner_root = HSplit([
-        output_container,
         details_pane,
         spinner_container,
         Window(height=1, char="─", style="class:frame.border"),
@@ -883,9 +780,9 @@ def run_tui(agent) -> None:
         key_bindings=all_bindings,
         style=style,
         full_screen=False,
-        mouse_support=True,
+        mouse_support=False,
     )
-    printer_holder["p"] = TuiPrinter(output=output, app=app, follow_mode=follow_mode)
+    printer_holder["p"] = TuiPrinter(app=app)
 
     # ------------------------------------------------------------------
     # Event loop
@@ -901,23 +798,22 @@ def run_tui(agent) -> None:
                     except Exception:
                         pass
 
-        app_task = asyncio.create_task(app.run_async())
-        spinner_task = asyncio.create_task(_spinner_loop())
-        spinner["task"] = spinner_task
+        with patch_stdout():
+            app_task = asyncio.create_task(app.run_async())
+            spinner_task = asyncio.create_task(_spinner_loop())
+            spinner["task"] = spinner_task
 
-        # TUI buffer starts empty; the banner was printed above before the
-        # event loop started (see build_welcome_banner call below).
-        try:
-            await app_task
-        finally:
-            spinner_task.cancel()
             try:
-                await spinner_task
-            except Exception:
-                pass
-            if not app_task.done():
-                app.exit(result=None)
                 await app_task
+            finally:
+                spinner_task.cancel()
+                try:
+                    await spinner_task
+                except Exception:
+                    pass
+                if not app_task.done():
+                    app.exit(result=None)
+                    await app_task
 
     # Print the Rich banner into the terminal scrollback *before* the
     # prompt_toolkit app starts (full_screen=False, so this works cleanly).
