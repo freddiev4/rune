@@ -88,11 +88,6 @@ def build_welcome_banner(console, agent) -> None:
     if len(model_short) > 30:
         model_short = model_short[:27] + "…"
 
-    # --- Big block logo ---
-    console.print()
-    console.print(RUNE_LOGO)
-    console.print()
-
     # --- Left column: sigil + session summary ---
     left_lines = [
         "",
