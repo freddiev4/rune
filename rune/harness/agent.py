@@ -12,7 +12,7 @@ from typing import Any, Callable, Generator
 from ..agents import Agent as AgentDef, get_agent, AGENT_REGISTRY
 from rune.harness.mcp_client import MCPManager
 from rune.harness.permissions import PermissionLevel
-from rune.harness.providers import Provider, create_provider
+from rune.harness.providers import Provider, ReasoningConfig, create_provider
 from rune.harness.agents_md import read_project_docs
 from rune.harness.session import Session
 from rune.harness.store import SessionStore
@@ -27,12 +27,19 @@ class AgentConfig:
     The *model* field uses ``provider/model-name`` format, e.g.
     ``openai/gpt-5.2-2025-12-11`` or ``anthropic/claude-sonnet-4-20250514``.
     A bare model name (no slash) defaults to the ``openai`` provider.
+
+    Set *reasoning* to a :class:`~rune.harness.providers.ReasoningConfig`
+    instance to enable model reasoning/thinking for supported models:
+
+    - **OpenAI** o-series (o1, o3, o4-mini …): uses ``reasoning_effort``.
+    - **Anthropic** Claude 3.7+: uses extended thinking with a token budget.
     """
     model: str = "openai/gpt-4o"
     agent_name: str = "build"  # Which agent definition to use
     auto_approve_tools: bool = True
     mcp_config_path: str | None = None  # Path to mcp.json
     use_store: bool = True  # Whether to persist sessions to SQLite
+    reasoning: ReasoningConfig | None = None  # Enable reasoning/thinking
 
 
 @dataclass
@@ -176,6 +183,9 @@ class Agent:
 
             message = response.choices[0].message
 
+            # Extract thinking blocks if the provider returned them (Anthropic).
+            thinking_blocks = getattr(message, "_thinking_blocks", None)
+
             if message.tool_calls:
                 tool_calls_data = [
                     {
@@ -191,6 +201,7 @@ class Agent:
                 self.session.add_assistant_message(
                     content=message.content,
                     tool_calls=tool_calls_data,
+                    thinking_blocks=thinking_blocks,
                 )
 
                 tool_results = []
@@ -215,7 +226,10 @@ class Agent:
                 if self.store:
                     self.store.save_session(self.session)
             else:
-                self.session.add_assistant_message(content=message.content)
+                self.session.add_assistant_message(
+                    content=message.content,
+                    thinking_blocks=thinking_blocks,
+                )
                 turn_result = TurnResult(
                     response=message.content,
                     tool_calls=[],
@@ -249,6 +263,7 @@ class Agent:
             tool_choice="auto",
             temperature=self.agent_def.temperature,
             max_completion_tokens=self.agent_def.max_completion_tokens,
+            reasoning=self.config.reasoning,
         )
 
     def _execute_tool(self, tool_call) -> ToolResult:

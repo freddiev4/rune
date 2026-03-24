@@ -36,12 +36,24 @@ class ToolCall:
 class ChatMessage:
     content: str | None = None
     tool_calls: list[ToolCall] | None = None
+    thinking: str | None = None  # Reasoning/thinking content from the model
 
 
 @dataclass
 class Usage:
     prompt_tokens: int = 0
     completion_tokens: int = 0
+
+
+@dataclass
+class ReasoningConfig:
+    """Configuration for model reasoning/thinking.
+
+    - *effort*: OpenAI reasoning effort — ``"low"``, ``"medium"``, or ``"high"``.
+    - *budget_tokens*: Anthropic extended-thinking token budget.
+    """
+    effort: str = "medium"
+    budget_tokens: int = 8000
 
 
 @dataclass
@@ -94,6 +106,7 @@ class Provider:
         tool_choice: str = "auto",
         temperature: float = 0.0,
         max_completion_tokens: int = 4096,
+        reasoning: ReasoningConfig | None = None,
     ) -> ChatResponse:
         raise NotImplementedError
 
@@ -105,9 +118,21 @@ class Provider:
 class OpenAIProvider(Provider):
     provider_name = "openai"
 
+    # o-series models support reasoning_effort instead of temperature.
+    _REASONING_MODELS = frozenset({
+        "o1", "o1-mini", "o1-preview",
+        "o3", "o3-mini",
+        "o4-mini",
+    })
+
     def __init__(self) -> None:
         from openai import OpenAI
         self.client = OpenAI()
+
+    def _is_reasoning_model(self, model: str) -> bool:
+        """Return True if *model* is an o-series reasoning model."""
+        base = model.split("-202")[0]  # strip date suffixes like -2025-04-16
+        return base in self._REASONING_MODELS
 
     def chat(
         self,
@@ -118,16 +143,28 @@ class OpenAIProvider(Provider):
         tool_choice: str = "auto",
         temperature: float = 0.0,
         max_completion_tokens: int = 4096,
+        reasoning: ReasoningConfig | None = None,
     ) -> ChatResponse:
+        is_o_series = self._is_reasoning_model(model)
+
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
-            "temperature": temperature,
             "max_completion_tokens": max_completion_tokens,
         }
+
+        if is_o_series:
+            # o-series models do not support temperature; they use reasoning_effort.
+            effort = reasoning.effort if reasoning else "medium"
+            kwargs["reasoning_effort"] = effort
+        else:
+            kwargs["temperature"] = temperature
+
         if tools:
             kwargs["tools"] = tools
-            kwargs["tool_choice"] = tool_choice
+            if not is_o_series:
+                # tool_choice is not supported on some o-series variants
+                kwargs["tool_choice"] = tool_choice
 
         resp = self.client.chat.completions.create(**kwargs)
         return self._normalise(resp)
@@ -182,6 +219,7 @@ class AnthropicProvider(Provider):
         tool_choice: str = "auto",
         temperature: float = 0.0,
         max_completion_tokens: int = 4096,
+        reasoning: ReasoningConfig | None = None,
     ) -> ChatResponse:
         system_text, converted_messages = self._convert_messages(messages)
         converted_tools = self._convert_tools(tools or [])
@@ -190,8 +228,18 @@ class AnthropicProvider(Provider):
             "model": model,
             "messages": converted_messages,
             "max_tokens": max_completion_tokens,
-            "temperature": temperature,
         }
+
+        if reasoning is not None:
+            # Extended thinking requires temperature=1 (API constraint).
+            kwargs["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": reasoning.budget_tokens,
+            }
+            kwargs["temperature"] = 1
+        else:
+            kwargs["temperature"] = temperature
+
         if system_text:
             kwargs["system"] = system_text
         if converted_tools:
@@ -238,6 +286,10 @@ class AnthropicProvider(Provider):
 
             if role == "assistant":
                 content_blocks: list[dict[str, Any]] = []
+                # Re-include any stored thinking blocks first (Anthropic
+                # requires them to be present in subsequent turns).
+                for tb in msg.get("thinking_blocks") or []:
+                    content_blocks.append(tb)
                 text = msg.get("content")
                 if text:
                     content_blocks.append({"type": "text", "text": text})
@@ -336,10 +388,26 @@ class AnthropicProvider(Provider):
     def _normalise(resp: Any) -> ChatResponse:
         """Convert an Anthropic response to the normalised ``ChatResponse``."""
         text_parts: list[str] = []
+        thinking_parts: list[str] = []
+        thinking_blocks: list[dict[str, Any]] = []
         tool_calls: list[ToolCall] = []
 
         for block in resp.content:
-            if block.type == "text":
+            if block.type == "thinking":
+                thinking_parts.append(block.thinking)
+                # Preserve the raw block so it can be replayed in later turns.
+                thinking_blocks.append({
+                    "type": "thinking",
+                    "thinking": block.thinking,
+                    "signature": block.signature,
+                })
+            elif block.type == "redacted_thinking":
+                # Preserve opaque redacted blocks for round-tripping.
+                thinking_blocks.append({
+                    "type": "redacted_thinking",
+                    "data": block.data,
+                })
+            elif block.type == "text":
                 text_parts.append(block.text)
             elif block.type == "tool_use":
                 tool_calls.append(
@@ -354,15 +422,17 @@ class AnthropicProvider(Provider):
                 )
 
         content = "\n".join(text_parts) if text_parts else None
+        thinking = "\n".join(thinking_parts) if thinking_parts else None
+        message = ChatMessage(
+            content=content,
+            tool_calls=tool_calls if tool_calls else None,
+            thinking=thinking,
+        )
+        # Attach raw thinking blocks so the session can round-trip them.
+        if thinking_blocks:
+            message._thinking_blocks = thinking_blocks  # type: ignore[attr-defined]
         return ChatResponse(
-            choices=[
-                Choice(
-                    message=ChatMessage(
-                        content=content,
-                        tool_calls=tool_calls if tool_calls else None,
-                    )
-                )
-            ],
+            choices=[Choice(message=message)],
             usage=Usage(
                 prompt_tokens=getattr(resp.usage, "input_tokens", 0) or 0,
                 completion_tokens=getattr(resp.usage, "output_tokens", 0) or 0,
