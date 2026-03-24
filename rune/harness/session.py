@@ -28,6 +28,9 @@ class Message:
     tool_calls: list[dict[str, Any]] | None = None
     tool_call_id: str | None = None
     name: str | None = None
+    # Anthropic extended-thinking blocks (thinking / redacted_thinking).
+    # These must be round-tripped verbatim in subsequent turns.
+    thinking_blocks: list[dict[str, Any]] | None = None
 
     def to_api_format(self) -> dict[str, Any]:
         """Convert to OpenAI API message format."""
@@ -40,6 +43,8 @@ class Message:
             msg["tool_call_id"] = self.tool_call_id
         if self.name:
             msg["name"] = self.name
+        if self.thinking_blocks:
+            msg["thinking_blocks"] = self.thinking_blocks
         return msg
 
 
@@ -91,9 +96,15 @@ class Session:
         self,
         content: str | None = None,
         tool_calls: list[dict[str, Any]] | None = None,
+        thinking_blocks: list[dict[str, Any]] | None = None,
     ) -> None:
         """Add an assistant message to the history."""
-        self.messages.append(Message(role="assistant", content=content, tool_calls=tool_calls))
+        self.messages.append(Message(
+            role="assistant",
+            content=content,
+            tool_calls=tool_calls,
+            thinking_blocks=thinking_blocks,
+        ))
 
     def add_tool_result(self, tool_call_id: str, name: str, result: str) -> None:
         """Add a tool result to the history."""
@@ -230,6 +241,7 @@ class Session:
                 tool_calls=msg_data.get("tool_calls"),
                 tool_call_id=msg_data.get("tool_call_id"),
                 name=msg_data.get("name"),
+                thinking_blocks=msg_data.get("thinking_blocks"),
             ))
 
         return session
